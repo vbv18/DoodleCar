@@ -2,6 +2,7 @@
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include <math.h>
+#include <SoftwareSerial.h>
 
 // Motor pins
 #define M1_L    3    // Left IN1 (PWM)
@@ -17,13 +18,15 @@ const float WHEEL_DIAMETER = 0.03; // 3cm wheel diameter
 const float MAX_RPM = 255.0;     // Maximum motor RPM
 
 // Circle motion parameters
-const float CIRCLE_RADIUS = 0.60;  // meters (adjust as needed)
+float CIRCLE_RADIUS = 0.60;  // meters (adjust as needed changeable)
+
 const int BASE_SPEED = 225;        // Center speed (PWM 0-255)
 const int MIN_WHEEL_SPEED = 200;    // Minimum PWM to keep wheels moving
 const float KP = 10.0;             // Yaw-rate proportional gain
 const bool STOP_AFTER_CIRCLE = true; // Set to false for continuous circling
 
 Adafruit_MPU6050 mpu;
+SoftwareSerial BTSerial(7, 8);  // RX, TX (connect HC-05 TX to Arduino pin 7, RX to pin 8)
 
 // Motion variables
 float yaw = 0;
@@ -47,6 +50,10 @@ void setRightMotor(int pwm) {
 // Setup
 void setup() {
   Serial.begin(9600);
+
+  BTSerial.begin(9600);  // typical HC-05/HC-06 baud rate
+  Serial.println("Waiting for circle radius from Bluetooth...");
+
   
   // Motor outputs
   pinMode(M1_L, OUTPUT); pinMode(M2_L, OUTPUT);
@@ -75,6 +82,22 @@ void setup() {
 
 // Main loop
 void loop() {
+// Check for new radius from Bluetooth
+  if (BTSerial.available()) {
+    String radiusStr = BTSerial.readStringUntil('\n');  // expects a number followed by newline
+    float newRadius = radiusStr.toFloat();
+    if (newRadius > 0.1 && newRadius < 5.0) {  // sanity check radius range
+      CIRCLE_RADIUS = newRadius;
+      yawAccum = 0;   // Reset for new circle
+      yaw = 0;
+      prevYaw = 0;
+      Serial.print("New circle radius set: ");
+      Serial.println(CIRCLE_RADIUS);
+    }
+  }
+
+
+  
   unsigned long now = micros();
   float dt = (now - prevTime) / 1e6;
   prevTime = now;
